@@ -1,0 +1,1045 @@
+<!doctype html>
+<html lang="hu">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Liska-állomás</title>
+<script type="importmap">{"imports":{"three":"/vendor/three/build/three.module.js","three/addons/":"/vendor/three/examples/jsm/"}}</script>
+<style>
+:root {
+  --bg: #02070E; --glass: rgba(4, 16, 26, .74); --glass2: rgba(8, 28, 42, .78); --line: rgba(70, 200, 235, .3);
+  --ink: #D7EEF8; --bright: #FFFFFF; --muted: #86A9BA; --cyan: #46C8EB; --signal: #F2B705; --danger: #FF6B5E; --good: #5FD08A;
+  --gyar: #5AA2E6; --lako: #5FD08A; --uzlet: #B58CE6;
+  --display: Bahnschrift, "DIN Alternate", "Roboto Condensed", "Arial Narrow", sans-serif;
+  --text: "Segoe UI Variable Text", "Segoe UI", -apple-system, "Helvetica Neue", Arial, sans-serif;
+  --lw: clamp(320px, 25vw, 430px); --rw: clamp(420px, 32vw, 540px);
+}
+* { box-sizing: border-box; }
+html { background: var(--bg); color: var(--ink); font: 14.5px/1.42 var(--text); }
+body { margin: 0; height: 100vh; overflow: hidden; display: grid; grid-template-rows: auto minmax(0, 1fr); font-variant-numeric: tabular-nums; }
+h1, h2, h3 { font-family: var(--display); font-weight: 600; letter-spacing: .03em; margin: 0; color: var(--bright); }
+h1 { font-size: 1.45rem; } h2 { font-size: 1.12rem; } h3 { font-size: 1rem; }
+button, input, select { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; }
+[hidden] { display: none !important; }
+small, .muted { color: var(--muted); font-size: .84rem; }
+::-webkit-scrollbar { width: 9px; height: 9px; } ::-webkit-scrollbar-thumb { background: rgba(70, 200, 235, .35); border-radius: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+* { scrollbar-width: thin; scrollbar-color: rgba(70, 200, 235, .35) transparent; }
+
+/* háttér: az állomás térbeli képe az egész felület alatt */
+#bg, #bg3d { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; z-index: 0; touch-action: none; cursor: grab; }
+#bg.drag, #bg3d.drag { cursor: grabbing; }
+#labels, #leader { position: fixed; inset: 0; width: 100vw; height: 100vh; z-index: 1; pointer-events: none; overflow: hidden; }
+.lab { position: absolute; left: 0; top: 0; font: 700 11px/1 var(--display); color: #04121C; padding: 2px 5px; border-radius: 8px; border: 1px dashed transparent;
+       box-shadow: 0 0 6px rgba(0, 0, 0, .7); will-change: transform; }
+.dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: -1px; }
+.players { list-style: none; margin: 0; padding: 0; display: grid; gap: 5px; font-size: .9rem; }
+.players li { display: grid; grid-template-columns: 26px 1fr auto; align-items: center; column-gap: 6px; } .players li span.n { color: var(--muted); }
+.players li small { grid-column: 2 / 4; line-height: 1.2; }
+.ava { flex: none; vertical-align: -5px; }
+.missions { list-style: none; margin: 0; padding: 0; display: grid; gap: 7px; font-size: .92rem; }
+.missions li { display: grid; grid-template-columns: 1fr auto; column-gap: 10px; } .missions b { color: #FFE08A; white-space: nowrap; } .missions small { grid-column: 1 / 3; }
+.news li.say { color: var(--ink); font-weight: 400; } .news li.say b { color: var(--bright); }
+.ship { pointer-events: auto; width: min(100%, 540px); padding: 9px 14px; border-left: 3px solid var(--signal); font-size: .92rem; }
+.ship h3 { color: #FFE08A; } .ship .items { display: grid; gap: 8px; margin: 6px 0; }
+.ship .item { display: grid; gap: 3px; } .ship .item.sold { opacity: .6; } .ship .buyrow { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.ship.buy { order: -1; border-color: var(--signal); box-shadow: 0 0 18px rgba(242, 183, 5, .35); }
+@keyframes flash { 0%, 100% { background: var(--glass); } 30% { background: rgba(242, 183, 5, .35); } }
+.ship.flash { animation: flash 1.1s ease-out 2; }
+#shipNote { color: #FFE08A; font-size: .9rem; display: flex; align-items: center; gap: 10px; }
+.players li.me { color: var(--bright); font-weight: 600; } .players li.out { opacity: .55; }
+body.gl .key.type { display: none; }
+body.gl .scan { background: radial-gradient(ellipse at center, transparent 62%, rgba(0, 0, 0, .45) 100%); }
+.scan { position: fixed; inset: 0; z-index: 1; pointer-events: none;
+  background: repeating-linear-gradient(to bottom, rgba(120, 220, 255, .035) 0 1px, transparent 1px 3px),
+              radial-gradient(ellipse at center, transparent 60%, rgba(0, 0, 0, .5) 100%); }
+.bar, main, dialog { position: relative; z-index: 2; }
+.wrap { min-height: 0; display: flex; flex-direction: column; }
+.wrap > main { flex: 1 1 auto; min-height: 0; }
+.glass { background: var(--glass); border: 1px solid var(--line); border-top-color: rgba(70, 200, 235, .65); border-radius: 5px; }
+
+/* fejléc */
+.bar { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 30px; padding: 9px 18px;
+       background: rgba(2, 10, 18, .78); border-bottom: 1px solid var(--line); }
+.bar h1 { margin-right: auto; }
+.stat { display: flex; flex-direction: column; line-height: 1.15; }
+.stat b { font: 600 1.3rem var(--display); color: var(--bright); }
+.stat span { font-size: .76rem; color: var(--muted); }
+.gauge { min-width: 200px; flex: 0 1 280px; font-size: .9rem; }
+.gauge b { color: var(--bright); }
+.gauge .track { height: 14px; background: rgba(70, 200, 235, .14); border: 1px solid var(--line); border-radius: 3px; overflow: hidden; margin: 3px 0 2px; }
+.gauge .fill { height: 100%; width: 0; background: repeating-linear-gradient(135deg, var(--signal) 0 9px, #1B1602 9px 18px); }
+.gauge.high .fill { background: repeating-linear-gradient(135deg, var(--danger) 0 9px, #2A0704 9px 18px); }
+.gauge small { font-size: .74rem; }
+.ghost { background: rgba(6, 24, 36, .8); border: 1px solid var(--cyan); color: var(--ink); padding: 5px 13px; border-radius: 4px; cursor: pointer; font: 600 .92rem var(--display); }
+
+/* játéktér: bal és jobb oszlop, középen szabadon az állomás */
+.game { display: grid; grid-template-columns: var(--lw) minmax(0, 1fr) var(--rw); grid-template-rows: minmax(0, 1fr) auto;
+        gap: 12px; padding: 12px; height: 100%; min-height: 0; pointer-events: none; }
+.col { min-height: 0; overflow-y: auto; pointer-events: auto; display: flex; flex-direction: column; gap: 12px; padding-right: 2px; }
+.col > section { padding: 12px 14px; }
+.col > section > h2 { margin-bottom: 8px; }
+.stage { position: relative; min-width: 0; min-height: 0; pointer-events: none; display: flex; flex-direction: column; align-items: center; justify-content: space-between; }
+.legend { display: flex; flex-wrap: wrap; gap: 3px 14px; justify-content: center; font-size: .82rem; padding: 5px 12px;
+          background: rgba(2, 10, 18, .55); border-radius: 4px; }
+.key { display: inline-flex; align-items: center; gap: 5px; }
+.key i { width: 11px; height: 11px; display: inline-block; border: 2px solid currentColor; }
+.selinfo { pointer-events: auto; width: min(100%, 430px); padding: 11px 14px; border-left: 3px solid var(--cyan); }
+.selinfo dl { display: grid; grid-template-columns: auto 1fr auto 1fr; gap: 2px 10px; margin: 6px 0 0; font-size: .9rem; }
+.selinfo dt { color: var(--muted); } .selinfo dd { margin: 0; color: var(--bright); }
+.selinfo .quick { display: flex; align-items: center; gap: 10px; margin-top: 8px; flex-wrap: wrap; }
+.crisis { pointer-events: auto; width: min(100%, 540px); padding: 9px 14px; border-left: 3px solid var(--danger); font-size: .92rem; }
+.crisis h3 { color: #FFB199; }
+.hint { font-size: .84rem; color: var(--muted); background: rgba(2, 10, 18, .55); padding: 4px 12px; border-radius: 4px; }
+
+/* modulkártyák */
+.mod { padding: 9px 0; border-top: 1px solid rgba(70, 200, 235, .18); }
+.mod:first-child { border-top: 0; padding-top: 2px; }
+.mod.sel { background: rgba(242, 183, 5, .12); box-shadow: -14px 0 0 rgba(242, 183, 5, .12), 14px 0 0 rgba(242, 183, 5, .12); }
+.mod header { display: flex; align-items: center; gap: 7px; cursor: pointer; }
+.mod header b { color: var(--bright); font-weight: 600; }
+.grow { flex: 1; }
+.chip { display: inline-block; min-width: 1.5em; padding: 0 .35em; border-radius: 3px; color: #04121C;
+        font: 700 .8rem/1.5 var(--display); text-align: center; }
+.chip.gyar { background: var(--gyar); } .chip.lako { background: var(--lako); } .chip.uzlet { background: var(--uzlet); }
+.cond { display: inline-block; width: 46px; height: 7px; background: rgba(255, 255, 255, .16); border-radius: 4px; overflow: hidden; vertical-align: middle; margin-right: 5px; }
+.cond i { display: block; height: 100%; background: var(--good); }
+.cond.low i { background: var(--danger); }
+.fields { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 6px 12px; margin-top: 6px; }
+.fields label { display: flex; flex-direction: column; gap: 2px; font-size: .8rem; color: var(--muted); }
+.fields label.check { flex-direction: row; align-items: center; gap: 6px; font-size: .9rem; color: var(--ink); padding-bottom: 5px; }
+.fields output { color: var(--bright); padding: 0; }
+.card.own input[type=number] { width: 5.6em; }
+input[type=number] { width: 6.2em; padding: 4px 7px; border: 1px solid rgba(70, 200, 235, .5); border-radius: 4px; background: rgba(2, 12, 20, .85);
+                     color: var(--bright); text-align: right; }
+input[type=number]::placeholder { color: #6E93A5; }
+input[aria-invalid=true] { border-color: var(--danger); background: rgba(80, 14, 10, .6); }
+.mini { padding: 4px 9px; border: 1px solid rgba(70, 200, 235, .5); background: rgba(6, 24, 36, .9); color: var(--ink); border-radius: 4px; cursor: pointer; font-size: .82rem; margin-bottom: 1px; }
+.mk .line { display: flex; align-items: center; gap: 4px 10px; margin-top: 5px; flex-wrap: wrap; font-size: .88rem; }
+.mk .line input { width: 7.8em; margin-left: auto; }
+.mk .line .cond { width: 36px; }
+.mk .pay { font-size: .8rem; color: var(--muted); }
+.mk .holder { color: var(--muted); font-size: .88rem; }
+.mk .price { color: var(--bright); min-width: 5.2em; text-align: right; }
+.mk.free header small::after { content: ", gazdátlan"; color: var(--signal); }
+
+/* tények, hírek */
+.facts { display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; margin: 0; font-size: .9rem; }
+.facts dt { color: var(--muted); } .facts dd { margin: 0; }
+.spark { width: 100%; height: 50px; display: block; margin-top: 6px; }
+.news { list-style: none; margin: 0; padding: 0; }
+.news li { padding: 5px 0; border-top: 1px solid rgba(70, 200, 235, .18); font-size: .9rem; }
+.news li:first-child { border-top: 0; }
+.news li.me { color: var(--bright); font-weight: 600; }
+.news li.bad { color: var(--danger); }
+
+/* lezárás */
+.dock { grid-column: 1 / -1; pointer-events: auto; padding: 9px 16px; display: flex; flex-wrap: wrap; gap: 8px 26px; align-items: center; background: rgba(3, 13, 21, .9); }
+.dock .wide { flex: 1 1 280px; }
+.dock b { color: var(--bright); }
+.meter { height: 7px; background: rgba(255, 255, 255, .14); border-radius: 4px; overflow: hidden; margin-top: 4px; max-width: 460px; }
+.meter i { display: block; height: 100%; background: var(--cyan); }
+.meter.over i { background: var(--danger); }
+.primary { background: var(--signal); color: #1B1602; border: 0; border-radius: 5px; padding: 11px 28px; font: 700 1.05rem var(--display); cursor: pointer;
+           box-shadow: 0 0 18px rgba(242, 183, 5, .35); }
+.primary:disabled { background: #44525C; color: #9FB0BA; cursor: not-allowed; box-shadow: none; }
+.issues { color: var(--danger); font-size: .86rem; margin: 2px 0 0; padding-left: 1.1em; }
+.vote { display: inline-flex; border: 1px solid rgba(70, 200, 235, .5); border-radius: 5px; overflow: hidden; }
+.vote button { border: 0; background: rgba(2, 12, 20, .85); padding: 6px 12px; cursor: pointer; border-left: 1px solid rgba(70, 200, 235, .35); }
+.vote button:first-child { border-left: 0; }
+.vote button[aria-pressed=true] { background: var(--cyan); color: #04121C; font-weight: 700; }
+
+/* kezdő és záró képernyő, ablakok */
+.center { display: grid; align-items: center; justify-items: end; padding: 20px 5vw 20px 20px; overflow-y: auto; pointer-events: none; }
+.sheet { max-width: 700px; width: 100%; padding: 22px 26px; pointer-events: auto; background: rgba(4, 16, 26, .84); }
+.sheet p { max-width: 68ch; } .sheet ul { padding-left: 1.2em; max-width: 68ch; } .sheet li { margin: 4px 0; }
+.form { display: flex; flex-wrap: wrap; gap: 14px 28px; align-items: end; margin-top: 16px; }
+.form label { display: flex; flex-direction: column; gap: 4px; font-size: .88rem; color: var(--muted); }
+.form select, .form input { padding: 6px 8px; border: 1px solid rgba(70, 200, 235, .5); border-radius: 4px; background: rgba(2, 12, 20, .9); color: var(--bright); }
+table { border-collapse: collapse; width: 100%; }
+th, td { padding: 6px 8px; text-align: left; border-top: 1px solid rgba(70, 200, 235, .2); white-space: nowrap; }
+thead th { border-top: 0; font-weight: 600; font-size: .82rem; color: var(--muted); }
+td.num, th.num { text-align: right; }
+tr.you { background: rgba(242, 183, 5, .16); color: var(--bright); font-weight: 600; }
+.scroll { overflow-x: auto; }
+dialog { background: #051420; color: var(--ink); border: 1px solid var(--cyan); border-radius: 6px; max-width: 720px; padding: 20px 24px;
+         box-shadow: 0 0 60px rgba(40, 190, 230, .25); }
+dialog::backdrop { background: rgba(2, 7, 14, .78); }
+dialog b { color: var(--bright); }
+.error { position: relative; z-index: 3; margin: 10px 18px 0; background: rgba(80, 14, 10, .85); border: 1px solid var(--danger); color: #FFD4CF; padding: 8px 12px; border-radius: 5px; }
+
+/* keskeny képernyő: fent az állomás, alatta egymás alatt a panelek */
+@media (max-width: 1080px) {
+  body { height: auto; min-height: 100vh; overflow: auto; display: block; }
+  .game { display: flex; flex-direction: column; height: auto; padding: 10px; }
+  .stage { order: -1; height: 46vh; }
+  .col { overflow: visible; }
+  .dock { position: sticky; bottom: 0; }
+  .center { min-height: 80vh; justify-items: center; align-items: end; padding: 12px; }
+}
+@media (prefers-reduced-motion: no-preference) { .gauge .fill, .meter i { transition: width .35s ease; } }
+
+/* 2.1-es elrendezés: bal oldalt a játékmenet, jobb oldalt a modulkártyák, alul lebegő üzemeltetők */
+.ver { font-size: .78rem; color: var(--cyan); letter-spacing: .06em; margin-left: 6px; }
+.bar .spark { width: 92px; height: 30px; margin: 0 -14px 0 -18px; }
+.strip { flex-basis: 100%; display: flex; flex-wrap: wrap; gap: 3px 22px; font-size: .86rem; padding-top: 5px; border-top: 1px solid rgba(70, 200, 235, .18); }
+.fact small { margin-right: 6px; }
+.col .crisis, .col .ship { width: auto; }
+.modhead { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 6px; }
+.modhead .vote button { padding: 4px 9px; font-size: .84rem; }
+.cards { display: grid; gap: 8px; }
+.cards.grid { grid-template-columns: repeat(auto-fill, minmax(185px, 1fr)); }
+.card, .card:first-child { background: rgba(8, 28, 42, .6); border: 1px solid rgba(70, 200, 235, .24); border-radius: 5px; padding: 8px 10px; }
+.card.own { border-left: 3px solid var(--signal); }
+.card.free { border-style: dashed; }
+.card.sel { background: rgba(242, 183, 5, .15); border-color: var(--signal); box-shadow: none; }
+.mk.card .line { margin-top: 4px; flex-wrap: nowrap; white-space: nowrap; }
+.mk.card input { width: 100%; margin: 6px 0 0; }
+.mk.card .price { min-width: 0; font-weight: 600; }
+.mk.card.free header small::after { content: ""; }
+.mk.card.free .holder { color: var(--signal); }
+.ops { display: flex; flex-wrap: wrap; justify-content: center; align-items: flex-end; gap: 4px 16px; pointer-events: auto; }
+.op { position: relative; display: flex; flex-direction: column; align-items: center; font-size: .76rem; line-height: 1.15; cursor: default;
+      filter: drop-shadow(0 0 7px color-mix(in srgb, var(--c) 55%, transparent)); }
+.op .nm { color: var(--bright); font-weight: 600; margin-top: 2px; } .op .cnt { color: var(--muted); }
+.op.me .nm { color: var(--signal); } .op.out { opacity: .45; }
+.bubble { position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%); width: max-content; max-width: 230px; z-index: 3;
+          background: rgba(4, 16, 26, .94); border: 1px solid var(--c); border-radius: 8px; padding: 5px 9px; font-size: .82rem; line-height: 1.3; color: var(--bright); text-align: center; }
+.bubble.hi { bottom: calc(100% + 62px); }
+.bubble::after { content: ""; position: absolute; top: 100%; left: 50%; margin-left: -5px; border: 5px solid transparent; border-top-color: var(--c); }
+@keyframes drift { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
+@media (prefers-reduced-motion: no-preference) { .op { animation: drift 5.5s ease-in-out infinite; animation-delay: var(--d); } }
+</style>
+</head>
+<body>
+<canvas id="bg" aria-label="Az állomás térbeli képe: 24 modul gyűrűben"></canvas>
+<canvas id="bg3d" hidden aria-label="Az állomás térbeli képe: 24 modul gyűrűben"></canvas>
+<div id="labels"></div>
+<svg id="leader"><polyline fill="none" stroke="rgba(255,255,255,.6)" stroke-width="1"/></svg>
+<div class="scan"></div>
+
+<header class="bar">
+  <h1>Liska-állomás <small class="ver">v2.1.1</small></h1>
+  <div class="stat" id="stRound" hidden><b>–</b><span>kör</span></div>
+  <div class="stat" id="stBalance" hidden><b>–</b><span>egyenleg</span></div>
+  <svg class="spark" id="spark" viewBox="0 0 300 56" preserveAspectRatio="none" role="img" aria-label="Az egyenleged alakulása" hidden></svg>
+  <div class="stat" id="stCover" hidden><b>–</b><span>fedezet licitre és költésre</span></div>
+  <div class="gauge" id="stHazard" hidden>
+    <span>Hazard <b id="hzVal">–</b></span>
+    <div class="track"><div class="fill" id="hzFill"></div></div>
+    <small>1,00-nál az állomás összeomlik, és mindenki veszít</small>
+  </div>
+  <div class="stat" id="stFund" hidden><b>–</b><span>közösségi alap</span></div>
+  <div class="stat" id="stDiv" hidden><b>–</b><span>osztalékarány</span></div>
+  <button type="button" class="ghost" id="btnRules">Szabályok</button>
+  <div class="strip" id="facts" hidden></div>
+</header>
+
+<div class="wrap">
+<div class="error" id="err" hidden></div>
+
+<main class="center" id="start" hidden>
+  <section class="sheet glass">
+    <h2>Nyolc üzemeltető, huszonnégy modul, egy közös állomás</h2>
+    <p>A modul nem a tiéd, csak birtoklod. Te mondod meg, mennyit ér neked: e megtartási plafon után fizetsz körönként járadékot a közösségi alapba, és aki ennél többet ajánl, elviszi.</p>
+    <ul>
+      <li>Az nyer, akinek a játék végén a legnagyobb az egyenlege. A játék nagyjából 30 kör, a pontos vége titok.</li>
+      <li>Alacsony plafon: kevés járadék, de könnyen elviszik a modult. Magas plafon: biztonság, drágán.</li>
+      <li>Az elhanyagolt modulok növelik a hazardot. Ha eléri az 1-et, az állomás összeomlik, és mindenki veszít.</li>
+      <li>Az alapból osztalék jár mindenkinek; ami megmarad, az a tartalék a közös válságok ellen. Az arányról szavaztok.</li>
+    </ul>
+    <div class="form">
+      <label>Gemini-ellenfelek
+        <select id="optGemini">
+          <option value="0">nincs, csak gépi stratégiák</option>
+          <option value="2">2 (a GEMINI_API_KEY kulccsal)</option>
+          <option value="4">4 (a GEMINI_API_KEY kulccsal)</option>
+        </select>
+      </label>
+      <label>Seed (üresen véletlen)
+        <input id="optSeed" inputmode="numeric" placeholder="pl. 42" style="width:9em">
+      </label>
+      <button class="primary" type="button" id="btnStart">Játék indítása</button>
+    </div>
+    <p class="muted" style="margin-top:12px">Gemini-ellenfelekkel néhány kör lezárása fél percig is eltarthat, mert ilyenkor a modellek stratégiát választanak.</p>
+  </section>
+</main>
+
+<main class="game" id="game" hidden>
+  <aside class="col">
+    <section class="glass" id="missionBox" hidden>
+      <h2>Megbízások az anyabolygóról</h2>
+      <ul class="missions" id="missions"></ul>
+    </section>
+    <section class="crisis glass" id="crisisBox" hidden></section>
+    <section class="ship glass" id="shipBox" hidden></section>
+    <section class="glass">
+      <h2>Mi történt az előző körben</h2>
+      <ul class="news" id="news"></ul>
+    </section>
+  </aside>
+
+  <div class="stage" id="stage">
+    <div style="display:flex;flex-direction:column;align-items:center;gap:8px;width:100%">
+      <div class="legend">
+        <span class="key" style="color:var(--signal)"><i></i>a tiéd</span>
+        <span class="key" style="color:#7FA8B8"><i style="border-style:dashed"></i>gazdátlan</span>
+        <span class="key" style="color:var(--danger)"><i></i>meghibásodott</span>
+        <span class="muted">magasabb: fejlettebb, sötétebb: rosszabb állapotú</span>
+      </div>
+      <div class="selinfo glass" id="selInfo" hidden></div>
+    </div>
+    <div style="display:flex;flex-direction:column;align-items:center;gap:10px;width:100%">
+      <div class="ops" id="ops"></div>
+      <div class="hint" id="stageHint">Húzd a forgatáshoz, görgess a közelítéshez, kattints egy modulra</div>
+    </div>
+  </div>
+
+  <aside class="col">
+    <section class="glass">
+      <div class="modhead"><h2>Modulok</h2>
+        <div class="vote" id="filter" role="group" aria-label="Szűrés">
+          <button type="button" data-f="all">mind</button><button type="button" data-f="gyar">gyár</button><button type="button" data-f="lako">lakó</button><button type="button" data-f="uzlet">üzlet</button><button type="button" data-f="free">gazdátlan</button>
+        </div>
+      </div>
+      <p class="muted" id="ownEmpty" hidden style="margin:6px 0">Még nincs modulod. Licitálj egy gazdátlan modulra a nyitó árától.</p>
+      <div id="own" class="cards"></div>
+      <p class="muted" id="marketHint" style="margin:8px 0 6px"></p>
+      <div id="market" class="cards grid"></div>
+    </section>
+  </aside>
+
+  <footer class="dock glass">
+    <div id="voteBox" hidden>
+      <div style="font-size:.86rem;margin-bottom:4px">Szavazás: az alap mekkora része legyen osztalék?</div>
+      <div class="vote" id="vote" role="group" aria-label="Osztalékarány"></div>
+    </div>
+    <div id="pledgeBox" hidden>
+      <div style="font-size:.86rem;margin-bottom:4px">Felajánlásod a válság elhárítására (ha nem jön össze, visszajár)</div>
+      <input type="number" id="pledge" min="0" step="10" placeholder="0" style="width:8em" aria-label="Felajánlás a válság elhárítására">
+      <button type="button" class="mini" id="pledgeFair"></button>
+    </div>
+    <div id="shipNote" hidden>A kereskedőhajó itt van, vásárolhatsz tőle. <button type="button" class="mini" id="btnShip">Mutasd</button></div>
+    <div class="wide">
+      <div>Tervezett költés: <b id="spend">0</b> a <b id="coverNow">0</b> fedezetből</div>
+      <div class="meter" id="spendMeter"><i></i></div>
+      <ul class="issues" id="issues"></ul>
+    </div>
+    <button class="primary" type="button" id="btnTurn">Kör lezárása</button>
+  </footer>
+</main>
+
+<main class="center" id="end" hidden>
+  <section class="sheet glass">
+    <h2 id="endTitle">Vége a játéknak</h2>
+    <p id="endLead"></p>
+    <div class="scroll"><table id="rank">
+      <thead><tr><th>Hely</th><th>Játékos</th><th>Ki volt</th><th class="num">Egyenleg</th></tr></thead><tbody></tbody>
+    </table></div>
+    <p class="muted" id="endLog"></p>
+    <button class="primary" type="button" id="btnAgain">Új játék</button>
+  </section>
+</main>
+</div>
+
+<dialog id="rules">
+  <h2>Szabályok röviden</h2>
+  <ul>
+    <li><b>Megtartási plafon és járadék.</b> A plafon rejtett érték: az a legmagasabb licit, amellyel szemben még megtartod a modult. Körönként a plafon <span data-p="r"></span>%-át fizeted járadékként.</li>
+    <li><b>Nyilvános ár.</b> A járadékot nem befolyásolja. Innen indul a legkisebb licit, és ha elviszik a modulodat, az árat biztosan megkapod, plusz az ár fölötti többlet felét. Körönként legfeljebb <span data-p="delta"></span>%-kal csökkentheted.</li>
+    <li><b>Licit.</b> Más moduljára legalább az ára <span data-p="beta"></span>%-ával többet kell ajánlanod. Ha a licited nem haladja meg a birtokos plafonját, ő megtartja a modult, te nem fizetsz, az ára pedig a licitedre nő. Ha meghaladja, tiéd a modul. Gazdátlan modulnál a legmagasabb licit nyer.</li>
+    <li><b>Állapot.</b> A modul körönként kopik. A rossz állapot kevesebb bevételt, több meghibásodást és nagyobb hazardot jelent. A karbantartás pénzért javítja.</li>
+    <li><b>Növekedési fék.</b> <span data-p="span_free"></span> modul fölött minden további modul <span data-p="span_penalty"></span>%-kal csökkenti az összes modulod bevételét.</li>
+    <li><b>Szakértelem.</b> Típusonként más a szorzód; 1,00 az átlag. Technológiaváltáskor egy típusnál mindenkié újrasorsolódik, a sajátodat előre megtudod.</li>
+    <li><b>Hitel.</b> Az egyenleged a hitelkeretedig mehet mínuszba, körönként <span data-p="i"></span>% kamatért. Ha a kereten túlra kerülsz, csődbe mész, és elveszíted a moduljaidat.</li>
+    <li><b>Válsághelyzet.</b> Időnként közös veszély érkezik, két körrel előre jelezve. Az elhárítás árát előbb az alap tartaléka állja, a hiányt a titkos felajánlások adják össze. Ha nem jön össze, senki nem fizet, a hazard megugrik, és négy modul megsérül. A felajánlások utólag nyilvánosak.</li>
+    <li><b>Kereskedőhajó.</b> Időnként hajó érkezik az anyabolygóról, előre jelezve. Amíg itt van, egy modultípus hozama megnő, és a távozásakor jutalmat kap, aki abból a legtöbbet termelte. Az ittléte alatt körönként zárt licit megy a még el nem kelt eszközeire (bal oldalt, a hajó dobozában): hatékonyságnövelő, pajzs, javítókészlet.</li>
+    <li><b>Megbízások.</b> Mindig van néhány nyilvános cél az anyabolygóról. Aki elsőként teljesíti, megkapja a jutalmat; ha lejár, új jön helyette.</li>
+    <li><b>Közösségi alap.</b> Ide megy a járadék és a kamat. Az osztalékarány szerinti részét egyenlően szétosztják, a többiből a hazardot csökkentik.</li>
+  </ul>
+  <button class="primary" type="button" id="btnCloseRules">Rendben</button>
+</dialog>
+
+<script>
+"use strict";
+const $ = (s, el = document) => el.querySelector(s);
+const TYPES = { gyar: { name: "gyár", letter: "G" }, lako: { name: "lakó", letter: "L" }, uzlet: { name: "üzlet", letter: "Ü" } };
+const COLORS = { gyar: "#3A6EA5", lako: "#3E9A62", uzlet: "#8B5FB3" };
+const CODE = {
+  NOT_HOLDER: "nem a te modulod", OWN_MODULE: "saját modulra nem licitálhatsz",
+  PRICE_DROP_LIMIT: "az ár ennyit egy kör alatt nem csökkenhet", CAP_BELOW_PRICE: "a plafon nem lehet az ár alatt",
+  BID_BELOW_MIN: "a licit nem érte el a legkisebb megengedettet", INSUFFICIENT_COVER: "nem jutott rá fedezet",
+  MAX_LEVEL: "a modul már a legfelső szinten van", NO_OPEN_VOTE: "nincs nyitott szavazás",
+  DUPLICATE: "kétszer szerepelt", INVALID_TARGET: "érvénytelen érték", NOT_IN_REGIME: "ebben a rendben nem lehet",
+};
+let S = null, plan = null, selected = null, busy = false, filter = "all";
+
+const int = n => Math.round(n).toLocaleString("hu-HU");
+const dec = (n, d = 2) => Number(n).toLocaleString("hu-HU", { minimumFractionDigits: d, maximumFractionDigits: d });
+const who = id => id === null ? "gazdátlan" : (S && S.obs && id === S.obs.me.id ? "te" : ((S && S.names && S.names[id]) ? S.names[id].name : `${id + 1}. játékos`));
+// arc: sisakos fej a játékos színével; a szemellenző és az antenna játékosonként más
+const avatar = (id, size = 22) => { const c = ownerColor(id) || "#888", v = id % 3;
+  const visor = v === 0 ? '<rect x="5.5" y="9" width="13" height="6" rx="3"/>' : v === 1 ? '<path d="M4.5 12 Q12 5.5 19.5 12 Q12 16.5 4.5 12Z"/>' : '<rect x="5.5" y="9.5" width="5.5" height="5" rx="1.5"/><rect x="13" y="9.5" width="5.5" height="5" rx="1.5"/>';
+  return `<svg class="ava" width="${size}" height="${size}" viewBox="0 0 24 24" aria-hidden="true">${id % 2 ? `<rect x="11" y="0" width="2" height="4" fill="${c}"/>` : `<circle cx="19" cy="4" r="2" fill="${c}"/>`}<circle cx="12" cy="13" r="10" fill="${c}"/><g fill="#04121C">${visor}</g></svg>`; };
+const ITEMS = { turbo: ["hatékonyságnövelő", "+10% hozam minden modulodra a játék végéig"], pajzs: ["pajzs", "egyszer megvédi a moduljaidat a válság kárától"], javito: ["javítókészlet", "minden modulod azonnal hibátlan, és néhány körig nem kopik, nem hibásodik meg"] };
+const MISSIONS = { fejlesztes: "Fejlessz elsőként egy modult", hodito: "Szerezz meg elsőként licittel egy modult egy riválistól",
+  harom_tipus: "Birtokolj elsőként egyszerre gyárat, lakót és üzletet", negy_modul: "Birtokolj elsőként egyszerre négy modult",
+  mintagazda: "Tartsd minden modulodat (legalább kettőt) 85% fölött három körön át" };
+// játékosszínek: te arany vagy, a többiek jól megkülönböztethető színt kapnak
+const PLAYER_COLORS = ["#8FD3FF", "#46C8EB", "#E66BD8", "#A6E22E", "#6C8CFF", "#FF7043", "#2ED3B7", "#FF8FB8", "#E8EEF2", "#B58CE6", "#C9A27A", "#5FD08A"];
+const ownerColor = id => (id === null || id === undefined) ? null : (S && S.obs && id === S.obs.me.id ? "#F2B705" : PLAYER_COLORS[id % PLAYER_COLORS.length]);
+const dot = id => { const c = ownerColor(id); return c ? `<i class="dot" style="background:${c}"></i>` : ""; };
+const modName = m => `${m.id + 1}. ${TYPES[m.type].name}`;
+// magyar névelő sorszám előtt: "az 1.", "az 5.", "az 50.", de "a 2.", "a 11."
+const art = (n, cap) => { const t = String(n); const az = t[0] === "5" || (t[0] === "1" && (t.length === 1 || t.length === 4)); return (cap ? "A" : "a") + (az ? "z" : ""); };
+const theMod = (m, cap) => `${art(m.id + 1, cap)} ${modName(m)}`;
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+async function api(method, path, body) {
+  const res = await fetch(path, { method, headers: { "Content-Type": "application/json" }, body: body ? JSON.stringify(body) : undefined });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || "Ismeretlen hiba");
+  return data;
+}
+function fail(e) { const el = $("#err"); el.textContent = `Nem sikerült: ${e.message}. Fut még a kiszolgáló?`; el.hidden = false; }
+function newPlan() { plan = { price: {}, cap: {}, maint: {}, upg: {}, bid: {}, vote: null, pledge: 0, items: {} }; }
+const autoKeep = {};                                   // modulonként: automatikus karbantartás 90%-ig
+const CRISIS = { meteor: "Meteorraj közeledik", reaktor: "Reaktorhiba fenyeget", napkitores: "Napkitörés várható" };
+
+
+function show(id) {
+  for (const s of ["start", "game", "end"]) $("#" + s).hidden = s !== id;
+  for (const s of ["stRound", "stBalance", "stCover", "stHazard", "stFund", "stDiv", "facts", "spark"]) $("#" + s).toggleAttribute("hidden", id !== "game");
+  Holo.measure();
+}
+
+function render() {
+  $("#err").hidden = true;
+  if (!S || !S.active) { show("start"); return Holo.redraw(); }
+  fillRules();
+  if (S.finished) { renderEnd(); return Holo.redraw(); }
+  show("game");
+  const o = S.obs, st = o.station;
+  $("#stRound b").textContent = `${o.day + 1}.`;
+  $("#stRound span").textContent = `kör a nagyjából ${S.length[0]}–${S.length[1]}-ból`;
+  $("#stBalance b").textContent = int(o.me.balance);
+  $("#stCover b").textContent = int(o.me.cover);
+  $("#hzVal").textContent = dec(st.hazard);
+  $("#hzFill").style.width = `${Math.min(100, st.hazard * 100)}%`;
+  $("#stHazard").classList.toggle("high", st.hazard >= 0.6);
+  $("#stFund b").textContent = int(st.fund);
+  $("#stDiv b").textContent = dec(st.d);
+  renderFacts(); renderNews(); renderPlayers(); renderMissions(); renderCrisis(); renderShip(); renderOwn(); renderMarket(); renderVote(); renderSel(); recalc();
+  Holo.measure();
+}
+
+function renderPlayers() {
+  const held = {}; for (const m of S.obs.modules) if (m.holder !== null) held[m.holder] = (held[m.holder] || 0) + 1;
+  const said = {}; for (const c of (S.chatter || [])) said[c.player] = c.text;
+  let k = 0;
+  $("#ops").innerHTML = S.obs.players.map((p, i) => { const me = p.id === S.obs.me.id, text = said[p.id];
+    return `<div class="op${me ? " me" : ""}${p.status === "bankrupt" ? " out" : ""}" style="--d:${(i * 0.37) % 2.2}s;--c:${ownerColor(p.id)}" title="${me ? "Te" : esc(who(p.id)) + ": " + esc((S.names[p.id] || {}).style || "")}">
+      ${text ? `<div class="bubble${k++ % 2 ? " hi" : ""}">„${esc(text)}”</div>` : ""}${avatar(p.id, 34)}
+      <span class="nm">${me ? "Te" : esc(who(p.id))}</span><span class="cnt">${p.status === "bankrupt" ? "csőd" : (held[p.id] || 0) + " modul"}</span></div>`; }).join("");
+}
+
+function renderCrisis() {
+  const c = S.obs.station.crisis, box = $("#crisisBox"), pb = $("#pledgeBox");
+  box.hidden = !c; pb.hidden = !(c && S.obs.station.pledge_open);
+  if (pb.hidden) $("#pledge").value = "";
+  if (!c) return;
+  const left = c.due - S.obs.day, fund = S.obs.station.fund, short = Math.max(0, c.cost - fund), n = S.obs.players.length;
+  box.innerHTML = `<h3>${CRISIS[c.kind] || "Válsághelyzet"}</h3>
+    <div>${left <= 0 ? "<b>Ebben a körben dől el.</b>" : `${left} kör múlva dől el.`} Az elhárítás ára ${int(c.cost)}. Az alap tartalékából most ${int(Math.min(fund, c.cost))} fedezhető, a hiány ${int(short)}; ezt a felajánlásoknak kell összeadniuk. Egy főre ${int(Math.ceil(short / n))} jut.</div>
+    <small>Ha nem jön össze, senki nem fizet. ${c.kind === "napkitores" ? "A napkitörés két körre megfelezi minden modul hozamát." : c.kind === "reaktor" ? "A reaktorhiba nagyot emel a hazardon, és gyárak sérülnek." : "A meteorraj négy véletlen modult megrongál, és a hazard megugrik."}</small>`;
+  const fair = Math.ceil(short / n); $("#pledgeFair").textContent = `a rám eső rész: ${int(fair)}`; $("#pledgeFair").dataset.fair = fair;
+}
+
+function renderMissions() {
+  const ms = S.obs.station.missions || [], day = S.obs.day;
+  $("#missionBox").hidden = !ms.length;
+  $("#missions").innerHTML = ms.map(m => `<li><span>${MISSIONS[m.kind] || m.kind}</span><b>${int(m.reward)} jutalom</b>
+    <small>${m.expires - day > 0 ? `még ${m.expires - day} körig él` : "ez az utolsó köre"}${m.kind === "mintagazda" ? `; nálad ${m.my_progress}/3` : ""}</small></li>`).join("");
+}
+
+function renderShip() {
+  const sh = S.obs.station.ship, box = $("#shipBox"), note = $("#shipNote");
+  box.hidden = !sh; note.hidden = !(sh && sh.auction_open);
+  box.classList.toggle("buy", !!(sh && sh.auction_open));
+  if (!sh) return;
+  const t = TYPES[sh.module_type].name, day = S.obs.day;
+  const when = sh.here ? `Itt van; ${sh.leaves - day > 1 ? `még ${sh.leaves - day} körig marad` : "ez az utolsó köre"}.` : `${sh.arrives - day} kör múlva érkezik, és ${sh.leaves - sh.arrives} körig marad.`;
+  const items = sh.items.map(i => {
+    const name = `<b>${ITEMS[i.kind][0]}</b>: ${ITEMS[i.kind][1]}`;
+    if (i.sold_to !== null) return `<div class="item sold"><span>${name}</span><small>elkelt, a vevő ${i.sold_to === S.obs.me.id ? "te vagy" : esc(who(i.sold_to))}</small></div>`;
+    if (!sh.here) return `<div class="item"><span>${name}</span><small>érkezéskor licitálhatsz rá, legalább ${int(Math.ceil(i.reserve))}-ért</small></div>`;
+    return `<div class="item"><span>${name}</span><div class="buyrow"><input type="number" step="10" data-item="${i.id}" placeholder="licit: min. ${Math.ceil(i.reserve)}" value="${plan.items[i.id] || ""}" style="width:9em" aria-label="Licit: ${ITEMS[i.kind][0]}">
+      <button type="button" class="mini" data-minbid="${i.id}">legkisebb licit: ${int(Math.ceil(i.reserve))}</button></div></div>`; }).join("");
+  box.innerHTML = `<h3>Kereskedőhajó az anyabolygóról</h3>
+    <div>${when} ${t === "üzlet" ? "Az" : "A"} <b>${t}</b> modulok termékét vásárolja: hozamuk ${Math.round(sh.bonus * 100)}%-kal nő, amíg itt van. Aki addig a legtöbbet termeli belőle, ${int(sh.prize)} jutalmat kap${sh.here ? `; te eddig ${int(S.obs.me.ship_earned)}-nál tartasz` : ""}.</div>
+    <h3 style="margin-top:8px">${sh.auction_open ? "Most vásárolhatsz tőle" : "Eszközei"}</h3>
+    <div class="items">${items}</div>
+    ${sh.auction_open ? "<small>Zárt licit: írd be, mennyit adsz érte, és zárd le a kört. Eszközönként a legtöbbet ajánló viszi, és kifizeti a licitjét. Ami nem kel el, a következő körben is megvehető, amíg a hajó itt van.</small>" : ""}`;
+}
+
+function showShip() {                                   // a hajó doboza a szem elé kerül, és felvillan
+  const box = $("#shipBox"); if (box.hidden) return;
+  box.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  box.classList.remove("flash"); void box.offsetWidth; box.classList.add("flash");
+  const inp = $("#shipBox [data-item]"); if (inp) inp.focus({ preventScroll: true });
+}
+
+function condCell(q) { return `<span><span class="cond${q < 0.5 ? " low" : ""}"><i style="width:${Math.round(q * 100)}%"></i></span>${Math.round(q * 100)}%</span>`; }
+
+function renderOwn() {
+  const mine = S.obs.my_modules, P = S.obs.params;
+  $("#ownEmpty").hidden = !!mine.length;
+  $("#own").innerHTML = mine.map(m => {
+    const o = S.obs.options[m.id], keep = S.upkeep[m.id];
+    return `<article class="mod own card" data-mid="${m.id}">
+      <header><span class="chip ${m.type}">${TYPES[m.type].letter}</span><b>${modName(m)}</b><small>${m.level}. szint</small><span class="grow"></span>
+        <small title="Előző kör">+${int(m.last_income)} / −${int(m.last_rent)}</small>${condCell(m.q)}</header>
+      <div class="fields">
+        <label>Ár<input type="number" step="1" data-k="price" value="${Math.round(m.price)}" min="${Math.ceil(o.min_price)}" aria-label="${modName(m)} ára"><span>legalább ${int(Math.ceil(o.min_price))}</span></label>
+        <label>Plafon<input type="number" step="1" data-k="cap" value="${Math.round(m.cap)}" title="Megtartási plafon: mások nem látják, e után fizetsz járadékot" aria-label="${modName(m)} megtartási plafonja"><span>járadék <output class="rent">${int(P.r * (P.rent_base === "cap" ? m.cap : m.price))}</output>/kör</span></label>
+        <label>Karbantartás<input type="number" step="1" min="0" data-k="maint" placeholder="0" aria-label="${modName(m)} karbantartása"><span>szinten tartás: ${int(keep)}</span></label>
+        <button type="button" class="mini" data-full="${Math.ceil(o.full_maintenance)}" style="margin-bottom:1.35em">teljes: ${int(Math.ceil(o.full_maintenance))}</button>
+      </div>
+      <div class="fields" style="margin-top:2px">
+        ${o.upgrade_cost === null ? `<span class="muted">legfelső szint</span>` : `<label class="check" style="padding:0"><input type="checkbox" data-k="upg"> Fejlesztés ${int(o.upgrade_cost)}-ért</label>`}
+        <label class="check" style="padding:0;color:var(--muted)"><input type="checkbox" data-k="auto" ${autoKeep[m.id] ? "checked" : ""}> Automatikus karbantartás 90%-ig</label>
+      </div>
+    </article>`;
+  }).join("");
+  for (const m of mine) if (autoKeep[m.id]) fillAuto(m.id);
+}
+
+function fillAuto(id) {                                 // a 90%-hoz hiányzó karbantartás beírása
+  const m = S.obs.my_modules.find(m => m.id === id), inp = $(`#own .mod[data-mid="${id}"] [data-k="maint"]`);
+  if (!m || !inp) return;
+  const need = (S.obs.me.items && S.obs.me.items.javito_until > S.obs.day) ? 0 : Math.ceil(Math.max(0, 0.9 - m.q) * S.obs.params.mu * m.nominal);
+  inp.value = need > 0 ? need : "";
+}
+
+function renderMarket() {
+  const me = S.obs.me.id;
+  const rows = S.obs.modules.filter(m => m.holder !== me && (filter === "all" || (filter === "free" ? m.holder === null : m.type === filter)))
+    .sort((a, b) => (a.holder === null ? 0 : 1) - (b.holder === null ? 0 : 1) || a.id - b.id);
+  $("#marketHint").textContent = S.obs.day === 0
+    ? "Nyitólicit: a gazdátlan modulra a legmagasabb licit nyer, a nyitó ártól."
+    : "Mások moduljai. Ha a licited nem haladja meg a birtokos rejtett plafonját, ő megtartja, és nem fizetsz.";
+  for (const b of document.querySelectorAll("#filter button")) b.setAttribute("aria-pressed", b.dataset.f === filter);
+  $("#market").innerHTML = rows.map(m => `<article class="mod mk card${m.holder === null ? " free" : ""}" data-mid="${m.id}">
+      <header><span class="chip ${m.type}">${TYPES[m.type].letter}</span><b>${modName(m)}</b><small>${m.level}. sz.</small><span class="grow"></span><span class="price" title="Nyilvános ár">${int(m.price)}</span></header>
+      <div class="line"><span class="holder">${m.holder === null ? "gazdátlan" : dot(m.holder) + esc(who(m.holder))}</span><span class="grow"></span>${condCell(m.q)}</div>
+      <div class="line"><span title="Becsült bevétel körönként, ha a tiéd volna">nálad ${int(S.est[m.id])}/kör</span><span class="grow"></span><span class="pay"></span></div>
+      ${m.min_bid === null ? `<div class="muted">nem licitálható</div>` : `<input type="number" step="1" data-k="bid" placeholder="licit: min. ${Math.ceil(m.min_bid)}" title="A legkisebb érvényes licit ${Math.ceil(m.min_bid)}" aria-label="Licit: ${modName(m)}">`}
+    </article>`).join("") || `<p class="muted" style="margin:0">Nincs ilyen modul.</p>`;
+  for (const id in plan.bid) { const inp = $(`#market .mod[data-mid="${id}"] [data-k="bid"]`); if (inp) inp.value = plan.bid[id]; }
+}
+
+function renderSel() {
+  const el = $("#selInfo"), m = S && S.obs ? S.obs.modules.find(m => m.id === selected) : null;
+  el.hidden = !m; $("#stageHint").hidden = !!m;
+  for (const a of document.querySelectorAll(".mod[data-mid]")) a.classList.toggle("sel", +a.dataset.mid === selected);
+  if (!m) return;
+  const own = S.obs.my_modules.find(x => x.id === m.id);
+  const rows = [["Birtokos", m.holder === null ? "gazdátlan" : who(m.holder)], ["Állapot", `${Math.round(m.q * 100)}%`],
+                ["Ár", int(m.price)], ["Bevétel nálad", `${int(S.est[m.id])} körönként`]];
+  if (own) rows.push(["Előző kör", `${int(own.last_income)} bevétel`], ["Plafonod", int(own.cap)]);
+  let quick = "";
+  if (own) quick = `<div class="quick muted">Az árát, a plafonját és a karbantartását bal oldalt állítod.</div>`;
+  else if (m.min_bid !== null) quick = `<div class="quick"><label for="quickBid">Licited</label>
+      <input type="number" step="1" id="quickBid" data-quick="${m.id}" placeholder="min. ${Math.ceil(m.min_bid)}" value="${plan.bid[m.id] || ""}" style="width:9.5em">
+      <span class="muted" id="quickPay"></span></div>`;
+  el.innerHTML = `<h3>${modName(m)} modul, ${m.level}. szint</h3><dl>${rows.map(([k, v]) => `<dt>${k}</dt><dd>${esc(v)}</dd>`).join("")}</dl>${quick}`;
+}
+
+function num(v) { const n = parseFloat(String(v).replace(",", ".")); return Number.isFinite(n) ? n : null; }
+
+function recalc() {
+  const o = S.obs, P = o.params, issues = [];
+  let spend = 0;
+  for (const card of document.querySelectorAll("#own .mod")) {
+    const id = +card.dataset.mid, m = o.my_modules.find(m => m.id === id), opt = o.options[id];
+    const pIn = $('[data-k="price"]', card), cIn = $('[data-k="cap"]', card), mIn = $('[data-k="maint"]', card);
+    const price = num(pIn.value), cap = num(cIn.value), maint = num(mIn.value) || 0;
+    const badP = price === null || (price < Math.ceil(opt.min_price) - 1e-9 && Math.round(price) !== Math.round(m.price));
+    const badC = cap === null || (price !== null && cap < price);
+    pIn.setAttribute("aria-invalid", badP); cIn.setAttribute("aria-invalid", badC); mIn.setAttribute("aria-invalid", maint < 0);
+    if (badP) issues.push(`${modName(m)}: az ár legalább ${int(Math.ceil(opt.min_price))} legyen.`);
+    if (badC) issues.push(`${modName(m)}: a plafon nem lehet az ár alatt.`);
+    const base = P.rent_base === "cap" ? cap : price;
+    $(".rent", card).textContent = base === null ? "–" : int(P.r * base);
+    const changed = !badP && !badC && (Math.round(price) !== Math.round(m.price) || Math.round(cap) !== Math.round(m.cap));
+    if (changed) { plan.price[id] = price; plan.cap[id] = cap; } else { delete plan.price[id]; delete plan.cap[id]; }
+    const charge = Math.min(Math.max(0, maint), opt.full_maintenance);
+    if (charge > 0) plan.maint[id] = maint; else delete plan.maint[id];
+    spend += charge;
+    const up = $('[data-k="upg"]', card);
+    if (up && up.checked) { plan.upg[id] = true; spend += opt.upgrade_cost; } else delete plan.upg[id];
+  }
+  for (const card of document.querySelectorAll("#market .mod")) {
+    const id = +card.dataset.mid, m = o.modules.find(m => m.id === id), inp = $('[data-k="bid"]', card), pay = $(".pay", card);
+    if (!inp) continue;
+    const bid = num(inp.value), ref = bid || Math.ceil(m.min_bid);
+    const net = S.est[id] - P.r * ref - S.upkeep[id];
+    const turns = net > 0 ? Math.ceil(ref / net) : Infinity, pays = turns <= 60;       // ami a játék hosszánál jóval később térülne meg, az nem térül meg
+    const text = pays ? `${turns} kör alatt térül meg` : "nem térül meg";
+    pay.textContent = pays ? `megtérül: ${turns} kör` : "nem térül meg"; pay.title = `${int(ref)}-es áron számolva`;
+    const bad = bid !== null && bid > 0 && bid < Math.ceil(m.min_bid) - 1e-9;
+    inp.setAttribute("aria-invalid", bad);
+    if (bad) issues.push(`${modName(m)}: a licit legalább ${int(Math.ceil(m.min_bid))} legyen.`);
+    if (bid > 0 && !bad) { plan.bid[id] = bid; spend += bid; } else delete plan.bid[id];
+    if (id === selected) {
+      const q = $("#quickBid"), qp = $("#quickPay");
+      if (q && document.activeElement !== q) q.value = inp.value;
+      if (q) q.setAttribute("aria-invalid", bad);
+      if (qp) qp.textContent = `${int(ref)}-es áron ${text}`;
+    }
+  }
+  for (const id in plan.bid) if (!document.querySelector(`#market .mod[data-mid="${id}"]`)) spend += plan.bid[id];   // a szűrő miatt nem látszó licitek
+  const pIn = $("#pledge"), pv = $("#pledgeBox").hidden ? 0 : (num(pIn.value) || 0);
+  pIn.setAttribute("aria-invalid", pv < 0);
+  plan.pledge = pv > 0 ? pv : 0; spend += plan.pledge;
+  plan.items = {};
+  for (const inp of document.querySelectorAll("#shipBox [data-item]")) {
+    const v = num(inp.value), it = S.obs.station.ship.items[+inp.dataset.item], bad = v !== null && v > 0 && v < it.reserve;
+    inp.setAttribute("aria-invalid", bad);
+    if (bad) issues.push(`${ITEMS[it.kind][0]}: a licit legalább ${int(Math.ceil(it.reserve))} legyen.`);
+    if (v > 0 && !bad) { plan.items[it.id] = v; spend += v; }
+  }
+  const cover = o.me.cover, over = spend > cover + 1e-9;
+  if (over) issues.push(`A tervezett költés ${int(spend)}, a fedezeted ${int(cover)}. Vegyél vissza a licitekből vagy a költésből.`);
+  $("#spend").textContent = int(spend); $("#coverNow").textContent = int(cover);
+  $("#spendMeter i").style.width = `${Math.min(100, cover > 0 ? spend / cover * 100 : (spend > 0 ? 100 : 0))}%`;
+  $("#spendMeter").classList.toggle("over", over);
+  $("#issues").innerHTML = issues.map(t => `<li>${esc(t)}</li>`).join("");
+  $("#btnTurn").disabled = busy || issues.length > 0;
+  Holo.redraw();
+}
+
+function select(id, fromScene) {
+  selected = selected === id ? null : id;
+  renderSel();
+  if (S && S.obs && !S.finished) recalc();
+  const card = document.querySelector(`.mod[data-mid="${selected}"]`);
+  if (card) card.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  if (!fromScene && selected !== null) Holo.focus(selected);
+  Holo.redraw();
+}
+
+/* ---------- az állomás térbeli képe: kézzel írt 3D vetítés vászonra, külső könyvtár nélkül ---------- */
+var Holo = (() => {
+  const cv = $("#bg"), ctx = cv.getContext("2d");
+  let stopped = false;
+  const HC = { gyar: [90, 162, 230], lako: [95, 208, 138], uzlet: [181, 140, 230] };
+  const GOLD = [242, 183, 5], RED = [255, 90, 77], CYAN = [70, 200, 235];
+  const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const DEMO = Array.from({ length: 24 }, (_, i) => ({ id: i, type: i < 6 ? "gyar" : i < 16 ? "lako" : "uzlet", holder: null, q: 0.9, level: 1 }));
+  let yaw = 0.7, pitch = 0.62, dist = 3.05, last = 0, clock = 0, drag = null, hits = [], W = 0, H = 0, dpr = 1;
+  let view = { cx: 0, cy: 0, f: 1 }, aim = null, idleUntil = 0;
+  const stars = Array.from({ length: 420 }, () => {
+    const u = Math.random() * 2 - 1, a = Math.random() * 6.283, r = Math.sqrt(1 - u * u);
+    return [r * Math.cos(a) * 40, u * 40, r * Math.sin(a) * 40, Math.random()];
+  });
+  const rgba = (c, a, k = 1) => `rgba(${Math.round(c[0] * k)},${Math.round(c[1] * k)},${Math.round(c[2] * k)},${a})`;
+  const live = () => !!(S && S.obs);
+
+  function rot(p, y = yaw, x = pitch) {             // világ -> nézet (kamera az origóban, +z felé néz)
+    const cy = Math.cos(y), sy = Math.sin(y), cx = Math.cos(x), sx = Math.sin(x);
+    const x1 = p[0] * cy + p[2] * sy, z1 = -p[0] * sy + p[2] * cy;
+    return [x1, p[1] * cx + z1 * sx, -p[1] * sx + z1 * cx];
+  }
+  function proj(v) { const z = v[2] + dist; return [view.cx + view.f * v[0] / z, view.cy - view.f * v[1] / z, z]; }
+  const P = p => proj(rot(p));
+  function line(a, b, color, width) {
+    const p = P(a), q = P(b);
+    if (p[2] < 0.25 || q[2] < 0.25) return;
+    ctx.strokeStyle = color; ctx.lineWidth = width * dpr; ctx.beginPath(); ctx.moveTo(p[0], p[1]); ctx.lineTo(q[0], q[1]); ctx.stroke();
+  }
+  function circle(radius, y, color, width, tilt, steps = 72) {
+    ctx.strokeStyle = color; ctx.lineWidth = width * dpr; ctx.beginPath();
+    let pen = false;
+    for (let i = 0; i <= steps; i++) {
+      const a = i / steps * 6.2832;
+      let pt = [radius * Math.cos(a), y, radius * Math.sin(a)];
+      if (tilt) pt = tilt(pt);
+      const s = P(pt);
+      if (s[2] < 0.25) { pen = false; continue; }
+      pen ? ctx.lineTo(s[0], s[1]) : ctx.moveTo(s[0], s[1]); pen = true;
+    }
+    ctx.stroke();
+  }
+  function trace(poly) { ctx.beginPath(); poly.forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1])); ctx.closePath(); }
+
+  function layout() {
+    const mods = live() ? S.obs.modules : DEMO, groups = new Set(mods.map(m => m.type)).size;
+    const per = (360 - groups * 7) / mods.length, out = [];
+    let a = -90 + 3.5, prev = null;
+    for (const m of mods) {
+      if (prev && prev !== m.type) a += 7;
+      prev = m.type;
+      out.push({ m, a0: (a + 0.9) * Math.PI / 180, a1: (a + per - 0.9) * Math.PI / 180 });
+      a += per;
+    }
+    return out;
+  }
+
+  function measure() {
+    dpr = Math.min(1.5, window.devicePixelRatio || 1);
+    const w = Math.round(innerWidth * dpr), h = Math.round(innerHeight * dpr);
+    if (w !== W || h !== H) { W = cv.width = w; H = cv.height = h; }
+    const st = $("#stage"), r = !$("#game").hidden ? st.getBoundingClientRect() : null;
+    if (r && r.width > 120 && r.height > 120)
+      view = { cx: (r.left + r.width / 2) * dpr, cy: (r.top + r.height * 0.46) * dpr, f: Math.min(r.width, r.height * 1.3) * 1.2 * dpr };
+    else if (innerWidth > 1080) view = { cx: W * 0.29, cy: H * 0.5, f: Math.min(W * 0.55, H) * 1.05 };   // kezdő és záró képernyő: az állomás balra, a lap jobbra
+    else view = { cx: W / 2, cy: H * 0.3, f: Math.min(W, H) * 1.0 };
+    redraw();
+  }
+
+  function draw() {
+    const on = live(), o = on ? S.obs : null, me = on ? o.me.id : -1, hz = on ? o.station.hazard : 0.12, t = clock / 1000;
+    const failed = new Set(on ? o.last_events.filter(e => e.type === "failure").map(e => e.module) : []);
+    const bids = on && plan ? plan.bid : {}, sel = on ? selected : null;
+    ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalCompositeOperation = "source-over"; ctx.globalAlpha = 1;
+    const bg = ctx.createRadialGradient(view.cx, view.cy, 0, view.cx, view.cy, Math.max(W, H) * 0.75);
+    bg.addColorStop(0, "#0A2030"); bg.addColorStop(0.5, "#051019"); bg.addColorStop(1, "#01040A");
+    ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
+
+    for (const s of stars) {                         // csillagok, lassabban fordulnak
+      const v = rot(s, yaw * 0.35, pitch * 0.5), z = v[2] + 2;
+      if (z <= 1) continue;
+      const f = Math.max(W, H) * 0.62, x = W / 2 + f * v[0] / z, y = H / 2 - f * v[1] / z;
+      const tw = 0.45 + 0.55 * Math.sin(t * (0.6 + s[3]) + s[3] * 40);
+      ctx.fillStyle = `rgba(200,235,255,${0.2 + 0.6 * s[3] * tw})`;
+      ctx.fillRect(x, y, (0.8 + s[3]) * dpr, (0.8 + s[3]) * dpr);
+    }
+    const pr = Math.max(W, H) * 1.05, pcx = W * 0.5, pcy = H + pr * 0.86;   // a bolygó pereme alul
+    const pg = ctx.createRadialGradient(pcx, pcy, pr * 0.9, pcx, pcy, pr * 1.03);
+    pg.addColorStop(0, "rgba(6,30,44,0.96)"); pg.addColorStop(0.9, "rgba(12,66,88,0.94)");
+    pg.addColorStop(0.968, "rgba(110,220,250,0.6)"); pg.addColorStop(1, "rgba(90,210,245,0)");
+    ctx.fillStyle = pg; ctx.beginPath(); ctx.arc(pcx, pcy, pr * 1.03, 0, 6.2832); ctx.fill();
+
+    ctx.globalCompositeOperation = "lighter";
+    const floor = -0.42;                             // holografikus asztal: körök, sugarak, pásztázó sugár
+    for (let r = 0.35; r <= 3.5; r += 0.28) circle(r, floor, rgba(CYAN, Math.abs(r - 1.75) < 0.05 ? 0.5 : 0.17 * Math.max(0.15, 1 - r / 3.8)), Math.abs(r - 1.75) < 0.05 ? 1.4 : 1, null, 96);
+    for (let i = 0; i < 24; i++) { const a = i / 24 * 6.2832; line([0.35 * Math.cos(a), floor, 0.35 * Math.sin(a)], [3.5 * Math.cos(a), floor, 3.5 * Math.sin(a)], rgba(CYAN, 0.085), 1); }
+    for (let i = 0; i < 72; i++) { const a = i / 72 * 6.2832, r0 = i % 6 ? 1.7 : 1.64; line([r0 * Math.cos(a), floor, r0 * Math.sin(a)], [1.75 * Math.cos(a), floor, 1.75 * Math.sin(a)], rgba(CYAN, 0.55), 1); }
+    for (let i = 0; i < 16; i++) { const a = t * 0.5 - i * 0.03; line([0, floor, 0], [1.75 * Math.cos(a), floor, 1.75 * Math.sin(a)], rgba(CYAN, 0.2 * (1 - i / 16)), 1.2); }
+
+    // hazard-burok: a veszéllyel együtt vörösödik és erősödik
+    const k = Math.min(1, hz / 0.8), hc = [0, 1, 2].map(i => CYAN[i] + (RED[i] - CYAN[i]) * k);
+    const pulse = 1 + 0.012 * Math.sin(t * (2 + 9 * hz)) * (0.3 + hz), sr = 1.38 * pulse, sa = 0.1 + 0.55 * hz;
+    circle(sr, 0, rgba(hc, sa), 1.2);
+    for (const ang of [0, 1.0472, 2.0944]) circle(sr, 0, rgba(hc, sa * 0.7), 1, p => { const c = Math.cos(ang), s2 = Math.sin(ang); return [p[0] * c, p[2], p[0] * s2]; });
+
+    const light = [-0.42, 0.78, -0.46], faces = [], tops = [];
+    for (const L of layout()) {                      // modulok: gyűrűszelet alapú hasábok
+      const m = L.m, col = HC[m.type], free = m.holder === null, mine = m.holder === me;
+      const h = 0.13 * (1 + 0.7 * (m.level - 1)), r1 = 0.8, r2 = 1.02, n = 3, ring = [];
+      for (let i = 0; i <= n; i++) {
+        const a = L.a0 + (L.a1 - L.a0) * i / n, c = Math.cos(a), s2 = Math.sin(a);
+        ring.push({ a, ib: [r1 * c, 0, r1 * s2], it: [r1 * c, h, r1 * s2], ob: [r2 * c, 0, r2 * s2], ot: [r2 * c, h, r2 * s2] });
+      }
+      const add = (pts, normal) => {
+        const v = pts.map(p => rot(p)), nv = rot(normal);
+        const c = v.reduce((acc, p) => [acc[0] + p[0], acc[1] + p[1], acc[2] + p[2]], [0, 0, 0]).map(x => x / v.length);
+        const facing = nv[0] * c[0] + nv[1] * c[1] + nv[2] * (c[2] + dist) < 0;
+        if (!facing && !free) return;
+        const shade = 0.42 + 0.58 * Math.max(0, nv[0] * light[0] + nv[1] * light[1] + nv[2] * light[2]);
+        faces.push({ s: v.map(proj), z: c[2], m, col, free, mine, shade, facing });
+      };
+      for (let i = 0; i < n; i++) {
+        const A = ring[i], B = ring[i + 1], am = (A.a + B.a) / 2, rad = [Math.cos(am), 0, Math.sin(am)];
+        add([A.it, A.ot, B.ot, B.it], [0, 1, 0]);
+        add([A.ob, B.ob, B.ot, A.ot], rad);
+        add([A.ib, A.it, B.it, B.ib], [-rad[0], 0, -rad[2]]);
+      }
+      const F = ring[0], E = ring[n];
+      add([F.ib, F.ob, F.ot, F.it], [Math.sin(F.a), 0, -Math.cos(F.a)]);
+      add([E.ib, E.it, E.ot, E.ob], [-Math.sin(E.a), 0, Math.cos(E.a)]);
+      const am = (L.a0 + L.a1) / 2, top = [0.91 * Math.cos(am), h, 0.91 * Math.sin(am)];
+      const outline = ring.map(r => P(r.it)).concat(ring.slice().reverse().map(r => P(r.ot)));
+      tops.push({ m, top, h, outline, z: rot(top)[2], mine, free, failed: failed.has(m.id) });
+    }
+    faces.sort((a, b) => b.z - a.z);
+    const hub = () => {                              // központi mag, küllők
+      ctx.globalCompositeOperation = "lighter";
+      const glow = 0.5 + 0.2 * Math.sin(t * 1.7);
+      for (const y of [-0.16, 0, 0.16, 0.3]) circle(y === 0.3 ? 0.07 : 0.2, y, rgba(CYAN, 0.75), 1.3, null, 40);
+      for (let i = 0; i < 8; i++) { const a = i / 8 * 6.2832 + t * 0.3; line([0.2 * Math.cos(a), -0.16, 0.2 * Math.sin(a)], [0.2 * Math.cos(a), 0.16, 0.2 * Math.sin(a)], rgba(CYAN, 0.55), 1); }
+      line([0, 0.16, 0], [0, 0.46, 0], rgba(CYAN, 0.8), 1.2);
+      for (let i = 0; i < 6; i++) { const a = i / 6 * 6.2832 + 0.26; line([0.2 * Math.cos(a), 0.05, 0.2 * Math.sin(a)], [0.8 * Math.cos(a), 0.05, 0.8 * Math.sin(a)], rgba(CYAN, 0.45), 1.5); }
+      const c = P([0, 0, 0]), rr = view.f * 0.09, g = ctx.createRadialGradient(c[0], c[1], 0, c[0], c[1], rr);
+      g.addColorStop(0, rgba(CYAN, 0.55 * glow)); g.addColorStop(1, rgba(CYAN, 0));
+      ctx.fillStyle = g; ctx.fillRect(c[0] - rr, c[1] - rr, rr * 2, rr * 2);
+    };
+    const paint = f => {
+      const edge = f.mine ? GOLD : f.col;
+      trace(f.s);
+      if (f.free) {
+        ctx.globalCompositeOperation = "lighter"; ctx.setLineDash([5 * dpr, 4 * dpr]);
+        ctx.strokeStyle = rgba(f.col, f.facing ? 0.6 : 0.2); ctx.lineWidth = dpr; ctx.stroke(); ctx.setLineDash([]); return;
+      }
+      ctx.globalCompositeOperation = "source-over";
+      ctx.fillStyle = rgba(f.col, 0.92, f.shade * (0.22 + 0.62 * f.m.q)); ctx.fill();
+      ctx.strokeStyle = rgba(edge, f.mine ? 0.85 : 0.5); ctx.lineWidth = (f.mine ? 1.3 : 0.8) * dpr; ctx.stroke();
+    };
+    let hubDone = false;
+    for (const f of faces) { if (!hubDone && f.z < 0) { hub(); hubDone = true; } paint(f); }
+    if (!hubDone) hub();
+
+    ctx.globalCompositeOperation = "lighter";        // körvonalak, jelzők, feliratok
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    hits = [];
+    for (const T of tops.sort((a, b) => b.z - a.z)) {
+      const m = T.m, c = P(T.top), near = Math.max(0, Math.min(1, (0.6 - T.z) / 1.6));
+      hits.push({ id: m.id, poly: T.outline, z: T.z });
+      if (!T.free) {
+        const edge = T.mine ? GOLD : HC[m.type];
+        trace(T.outline);
+        ctx.strokeStyle = rgba(edge, 0.22); ctx.lineWidth = 6 * dpr; ctx.stroke();
+        ctx.strokeStyle = rgba(edge, 0.95); ctx.lineWidth = (T.mine ? 2 : 1.2) * dpr; ctx.stroke();
+      }
+      if (T.mine) {                                  // jelzőfény a saját modul fölött
+        const b = P([T.top[0], T.h + 0.3, T.top[2]]), a = 0.6 + 0.4 * Math.sin(t * 3 + m.id), d = 5.5 * dpr;
+        ctx.strokeStyle = rgba(GOLD, 0.75); ctx.lineWidth = 1.4 * dpr; ctx.beginPath(); ctx.moveTo(c[0], c[1]); ctx.lineTo(b[0], b[1]); ctx.stroke();
+        ctx.fillStyle = rgba(GOLD, a);
+        ctx.beginPath(); ctx.moveTo(b[0], b[1] - d); ctx.lineTo(b[0] + d, b[1]); ctx.lineTo(b[0], b[1] + d); ctx.lineTo(b[0] - d, b[1]); ctx.closePath(); ctx.fill();
+      }
+      if (T.failed) { trace(T.outline); ctx.strokeStyle = rgba(RED, 0.5 + 0.5 * Math.sin(t * 7)); ctx.lineWidth = 2.5 * dpr; ctx.stroke(); }
+      if (bids[m.id] > 0) {                          // tervezett licit: aranygyűrű
+        const b = P([T.top[0], T.h + 0.14, T.top[2]]);
+        ctx.strokeStyle = rgba(GOLD, 0.9); ctx.lineWidth = 1.6 * dpr; ctx.beginPath(); ctx.arc(b[0], b[1], (6 + 2.5 * Math.sin(t * 4)) * dpr, 0, 6.2832); ctx.stroke();
+      }
+      if (m.id === sel) {                            // kijelölés és vezetővonal az adatlaphoz
+        trace(T.outline); ctx.strokeStyle = "rgba(255,255,255,.95)"; ctx.lineWidth = 2.2 * dpr; ctx.stroke();
+        const card = $("#selInfo");
+        if (!card.hidden) {
+          const r = card.getBoundingClientRect(), ex = (r.left + r.width / 2) * dpr, ey = ((r.top + r.height / 2) * dpr < c[1] ? r.bottom : r.top) * dpr;
+          ctx.strokeStyle = "rgba(255,255,255,.5)"; ctx.lineWidth = dpr;
+          ctx.beginPath(); ctx.moveTo(c[0], c[1]); ctx.lineTo(c[0], (c[1] + ey) / 2); ctx.lineTo(ex, (c[1] + ey) / 2); ctx.lineTo(ex, ey); ctx.stroke();
+        }
+      }
+      ctx.globalCompositeOperation = "source-over";
+      ctx.font = `600 ${Math.round((10 + 4 * near) * dpr)}px Bahnschrift, "DIN Alternate", "Arial Narrow", sans-serif`;
+      ctx.fillStyle = `rgba(255,255,255,${0.35 + 0.65 * near})`;
+      ctx.fillText(String(m.id + 1), c[0], c[1]);
+      ctx.globalCompositeOperation = "lighter";
+    }
+    ctx.globalCompositeOperation = "source-over";
+  }
+
+  function frame(now) {
+    const dt = Math.min(60, now - last); last = now; clock += dt;
+    if (aim) {
+      const u = Math.min(1, (clock - aim.t0) / 700), e = u < 0.5 ? 2 * u * u : 1 - Math.pow(-2 * u + 2, 2) / 2;
+      yaw = aim.from + (aim.to - aim.from) * e;
+      if (u >= 1) { aim = null; idleUntil = clock + 5000; }
+    } else if (!drag && clock > idleUntil) yaw += dt * 0.00014;
+    draw();
+    if (!stopped) requestAnimationFrame(frame);
+  }
+  function redraw() { if (still && W && !stopped) draw(); }
+  function focus(id) {                               // a kijelölt modul a kamera felé fordul
+    const L = layout().find(x => x.m.id === id);
+    if (!L) return;
+    const target = (L.a0 + L.a1) / 2 + Math.PI / 2;
+    let d = (target - yaw) % 6.2832; if (d > Math.PI) d -= 6.2832; if (d < -Math.PI) d += 6.2832;
+    if (still) { yaw += d; return redraw(); }
+    aim = { from: yaw, to: yaw + d, t0: clock };
+  }
+  function inside(poly, x, y) {
+    let hit = false;
+    for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+      const a = poly[i], b = poly[j];
+      if ((a[1] > y) !== (b[1] > y) && x < (b[0] - a[0]) * (y - a[1]) / (b[1] - a[1]) + a[0]) hit = !hit;
+    }
+    return hit;
+  }
+  cv.addEventListener("pointerdown", e => { drag = { x: e.clientX, y: e.clientY, yaw, pitch, moved: false }; aim = null; cv.setPointerCapture(e.pointerId); cv.classList.add("drag"); });
+  cv.addEventListener("pointermove", e => {
+    if (!drag) return;
+    const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+    if (Math.abs(dx) + Math.abs(dy) > 4) drag.moved = true;
+    yaw = drag.yaw - dx * 0.006; pitch = Math.max(0.12, Math.min(1.45, drag.pitch + dy * 0.005)); redraw();
+  });
+  const drop = e => {
+    const d = drag; drag = null; cv.classList.remove("drag"); idleUntil = clock + 4000;
+    if (!d || d.moved || e.type !== "pointerup" || !live() || S.finished) return;
+    const x = e.clientX * dpr, y = e.clientY * dpr;
+    const hit = hits.filter(h => inside(h.poly, x, y)).sort((a, b) => a.z - b.z)[0];
+    if (hit) select(hit.id, true); else if (selected !== null) select(selected, true);
+  };
+  cv.addEventListener("pointerup", drop); cv.addEventListener("pointercancel", drop);
+  cv.addEventListener("wheel", e => { e.preventDefault(); dist = Math.max(2.3, Math.min(6, dist + e.deltaY * 0.0022)); redraw(); }, { passive: false });
+  window.addEventListener("resize", measure);
+  window.addEventListener("keydown", e => {
+    if (e.target.matches("input, select, textarea, button") || document.querySelector("dialog[open]")) return;
+    const k = { ArrowLeft: [-0.12, 0], ArrowRight: [0.12, 0], ArrowUp: [0, -0.08], ArrowDown: [0, 0.08] }[e.key];
+    if (!k) return;
+    e.preventDefault(); aim = null; idleUntil = clock + 4000; yaw += k[0]; pitch = Math.max(0.12, Math.min(1.45, pitch + k[1])); redraw();
+  });
+  function start() { measure(); last = performance.now(); if (still) draw(); else requestAnimationFrame(frame); }
+  return { start, measure, redraw, focus, stop: () => { stopped = true; }, hits: () => hits.map(h => ({ id: h.id, z: h.z, poly: h.poly.map(p => [p[0] / dpr, p[1] / dpr]) })) };
+})();
+function renderFacts() {
+  const me = S.obs.me, P = S.obs.params;
+  const rows = [
+    ["Hitelkeret", int(me.heritage)],
+    ["Szakértelem", Object.keys(TYPES).map(t => `${TYPES[t].name} ${dec(me.skill[t] ?? 1)}`).join(", ")],
+    ["Növekedési fék", me.span_factor < 1 ? `${dec(me.span_factor)} (minden modulod ennyiszeresét hozza)` : "nincs levonás"],
+  ];
+  const guard = me.items && me.items.javito_until > S.obs.day ? me.items.javito_until - S.obs.day : 0;
+  if (me.boost > 0 || (me.items && me.items.pajzs > 0) || guard) rows.push(["Eszközeid", [me.boost > 0 ? `+${Math.round(me.boost * 100)}% hozam` : "", me.items && me.items.pajzs > 0 ? `${me.items.pajzs} pajzs` : "", guard ? `javítókészlet: még ${guard} körig nem kopnak a moduljaid` : ""].filter(Boolean).join(", ")]);
+  for (const x of me.skill_next) rows.push(["Technológiaváltás", `${TYPES[x.module_type].name}: ${art(x.start + 1)} ${x.start + 1}. körtől ${dec(x.value)} lesz a szakértelmed`]);
+  for (const x of S.obs.station.reskill_forecast) if (!me.skill_next.some(y => y.module_type === x.module_type))
+    rows.push(["Technológiaváltás", `${TYPES[x.module_type].name}, ${art(x.start + 1)} ${x.start + 1}. körtől`]);
+  $("#facts").innerHTML = rows.map(([k, v]) => `<span class="fact"><small>${k}</small>${esc(v)}</span>`).join("");
+  const h = S.history, svg = $("#spark");
+  if (h.length < 2) { svg.innerHTML = ""; return; }
+  const ys = h.map(p => p.balance), lo = Math.min(0, ...ys), hi = Math.max(1, ...ys);
+  const x = i => (i / (h.length - 1)) * 296 + 2, y = v => 52 - ((v - lo) / (hi - lo)) * 48;
+  svg.innerHTML = `<line x1="0" x2="300" y1="${y(0)}" y2="${y(0)}" stroke="rgba(134,169,186,.6)" stroke-dasharray="3 3"/>` +
+    `<polyline fill="none" stroke="#46C8EB" stroke-width="2" points="${h.map((p, i) => `${x(i)},${y(p.balance)}`).join(" ")}"/>`;
+}
+
+function eventText(e) {
+  const me = S.obs.me.id;
+  const mod = (id, cap) => { const m = S.obs.modules.find(m => m.id === id); return m ? theMod(m, cap) : `${art(id + 1, cap)} ${id + 1}. modul`; };
+  const from = n => `${art(n, false)} ${n}. körtől`;
+  switch (e.type) {
+    case "retained": if (e.holder === me) return ["me", `Licitáltak ${mod(e.module)} modulodra. Megtartottad, az ára ${int(e.price)} lett.`];
+      if (e.bidder === me) return ["me", `${mod(e.module, true)} birtokosa megtartotta a modult; az ára a licitedre nőtt: ${int(e.price)}.`];
+      return ["", `${mod(e.module, true)} modult megtartotta a birtokosa (${who(e.holder)}); az új ára ${int(e.price)}.`];
+    case "takeover": if (e.from === me) return ["me bad", `Elvitték ${mod(e.module)} modulodat. A nyertes licit: ${int(e.amount)}.`];
+      if (e.to === me) return ["me", `Megszerezted ${mod(e.module)} modult. Fizettél: ${int(e.amount)}.`];
+      return ["", `${mod(e.module, true)} gazdát cserélt: ${who(e.from)} helyett ${who(e.to)} birtokolja. A nyertes licit: ${int(e.amount)}.`];
+    case "acquired": return [e.player === me ? "me" : "", e.player === me ? `Megszerezted ${mod(e.module)} modult. Fizettél: ${int(e.amount)}.` : `${mod(e.module, true)} modult megszerezte: ${who(e.player)}. A nyertes licit: ${int(e.amount)}.`];
+    case "failure": { const m = S.obs.modules.find(m => m.id === e.module); return [m && m.holder === me ? "me bad" : "", `Meghibásodott ${mod(e.module)}${m && m.holder === me ? " modulod" : " modul"}; arra a körre nem termelt.`]; }
+    case "crisis_announced": return ["bad", `Válságot jeleztek: ${(CRISIS[e.kind] || "veszély").toLowerCase()}. ${art(e.due + 1, true)} ${e.due + 1}. körben dől el, az elhárítás ára ${int(e.cost)}.`];
+    case "crisis_averted": { const who2 = Object.entries(e.pledged).filter(([, v]) => v > 0.5).map(([p, v]) => `${who(+p)} ${int(v)}`);
+      return ["me", `Elhárítottátok a válságot. Az alapból ${int(e.from_fund)} ment rá; ${who2.length ? "felajánlásból fizetett: " + who2.join(", ") : "felajánlásra nem volt szükség"}.`]; }
+    case "mission_new": return ["", `Új megbízás: ${(MISSIONS[e.mission.kind] || e.mission.kind).toLowerCase()}. A jutalom ${int(e.mission.reward)}.`];
+    case "mission_done": return [e.winner === me ? "me" : "", e.winner === me ? `Teljesítetted a megbízást (${(MISSIONS[e.mission.kind] || "").toLowerCase()}), a jutalmad ${int(e.mission.reward)}.` : `Megbízás teljesítve (${(MISSIONS[e.mission.kind] || "").toLowerCase()}): ${who(e.winner)} vitte el a ${int(e.mission.reward)} jutalmat.`];
+    case "mission_expired": return ["", `Lejárt egy megbízás (${(MISSIONS[e.mission.kind] || "").toLowerCase()}); senki nem teljesítette.`];
+    case "ship_announced": return ["", `Kereskedőhajót jeleztek az anyabolygóról: ${art(e.arrives + 1)} ${e.arrives + 1}. körben érkezik, ${TYPES[e.module_type].name} termékeket vásárol, és eszközöket hoz (${e.items.map(i => ITEMS[i.kind][0]).join(", ")}).`];
+    case "item_sold": return [e.player === me ? "me" : "", e.player === me ? `Megvetted a hajóról: ${ITEMS[e.kind][0]} (${ITEMS[e.kind][1]}). Fizettél: ${int(e.amount)}.` : `A hajó eladta: ${ITEMS[e.kind][0]}. A vevő ${who(e.player)}, az ár ${int(e.amount)}.`];
+    case "ship_left": return [e.winner === me ? "me" : "", e.winner === null ? "A kereskedőhajó elment; a keresett termékből senki nem termelt." : (e.winner === me ? `A kereskedőhajó elment. Te termelted a legtöbbet, a jutalmad ${int(e.prize)}.` : `A kereskedőhajó elment. A legtöbbet ${who(e.winner)} termelte (${int(e.best)}), övé a ${int(e.prize)} jutalom.`)];
+    case "crisis_hit": { const offers = Object.entries(e.offered).map(([p, v]) => `${who(+p)} ${int(v)}`), mine = e.modules.some(id => S.obs.my_modules.some(m => m.id === id));
+      return [mine ? "me bad" : "bad", `Nem sikerült elhárítani a válságot, ${int(e.missing)} hiányzott. ${e.kind === "napkitores" ? "A napkitörés két körre megfelezi minden modul hozamát." : (e.modules.length ? `Megsérült modulok: ${e.modules.map(id => id + 1).join(", ")}.` : "Modul nem sérült.") + (e.kind === "reaktor" ? " A reaktorhiba miatt a hazard nagyot ugrott." : " A hazard megugrott.")}${e.shielded && e.shielded.length ? ` Pajzs védte: ${e.shielded.map(id => id + 1).join(", ")}.` : ""} ${offers.length ? "Felajánlott: " + offers.join(", ") + "." : "Senki nem ajánlott fel semmit."}`]; }
+    case "bankruptcy": return ["bad", `Csődbe ment: ${who(e.player)}. A moduljai gazdátlanná váltak.`];
+    case "entry": return ["", `Új üzemeltető érkezett: ${who(e.player)}.`];
+    case "reskill_announced": return ["", `Technológiaváltást jelentettek be: ${TYPES[e.module_type].name} modulok, ${from(e.start + 1)}.`];
+    case "reskill": return ["", `Életbe lépett a technológiaváltás: ${TYPES[e.module_type].name} modulok.`];
+    case "vote": return ["", `Lezárult a szavazás: az osztalékarány ${dec(e.d)}.`];
+    case "shock": return ["", `Keresleti sokk: ${TYPES[e.module_type].name} modulok három körig kevesebbet hoznak.`];
+    case "boom": return ["", `Fellendülés: ${TYPES[e.module_type].name} modulok három körig többet hoznak.`];
+    case "accident": return ["bad", "Baleset történt az állomáson, a hazard megugrott."];
+    case "upgrade": return ["", `Fejlesztették ${mod(e.module)} modult; mostantól ${e.level}. szintű.`];
+    default: return null;
+  }
+}
+
+function renderNews() {
+  const items = [];
+  const h = S.history;
+  if (h.length >= 2) {
+    const d = h[h.length - 1].balance - h[h.length - 2].balance;
+    items.push(["me", `Az egyenleged változása: ${d >= 0 ? "+" : "−"}${int(Math.abs(d))}.`]);
+  }
+  for (const r of S.obs.my_results) {
+    const a = r.action, m = S.obs.modules.find(m => m.id === a.module), what = m ? modName(m) : "", The = m ? theMod(m, true) : "";
+    if (r.code !== "OK") items.push(["me bad", `Elutasítva (${a.type === "Bid" ? "licit" : a.type === "SetValuation" ? "árazás" : a.type === "Maintain" ? "karbantartás" : a.type === "Upgrade" ? "fejlesztés" : "szavazat"}${what ? ", " + what : ""}): ${CODE[r.code] || r.code}.`]);
+    else if (r.outcome === "outbid") items.push(["me", `${The} modulra más többet ajánlott nálad.`]);
+    else if (r.outcome === "lapsed") items.push(["me", `${The} karbantartása elmaradt, mert a modul gazdát cserélt.`]);
+  }
+  for (const e of S.obs.last_events) { const t = eventText(e); if (t) items.push(t); }
+  items.sort((a, b) => (b[0].includes("me") ? 1 : 0) - (a[0].includes("me") ? 1 : 0));
+  const says = (S.chatter || []).map(c => `<li class="say">${avatar(c.player, 20)} <b>${esc(who(c.player))}:</b> „${esc(c.text)}”</li>`).join("");
+  $("#news").innerHTML = items.length ? items.map(([c, t]) => `<li class="${c}">${esc(t)}</li>`).join("")
+    : `<li class="muted">${S.obs.day === 0 ? "Ez a nyitólicit: minden modul gazdátlan, és mindenki a hitelkeretéből licitál." : "Semmi említésre méltó."}</li>`;
+}
+
+function renderVote() {
+  const open = S.obs.station.vote_open;
+  $("#voteBox").hidden = !open;
+  if (!open) return;
+  $("#vote").innerHTML = S.obs.station.vote_options.map(v =>
+    `<button type="button" data-v="${v}" aria-pressed="${plan.vote === v}">${dec(v)}</button>`).join("");
+}
+
+function buildActions() {
+  const acts = [];
+  for (const id in plan.price) acts.push({ type: "SetValuation", module: +id, price: plan.price[id], cap: plan.cap[id] });
+  for (const id in plan.maint) acts.push({ type: "Maintain", module: +id, amount: plan.maint[id] });
+  if (plan.pledge > 0) acts.push({ type: "Pledge", amount: plan.pledge });
+  for (const id in plan.items) acts.push({ type: "BidItem", item: +id, amount: plan.items[id] });
+  for (const id in plan.upg) acts.push({ type: "Upgrade", module: +id });
+  for (const id in plan.bid) acts.push({ type: "Bid", module: +id, amount: plan.bid[id] });
+  if (plan.vote !== null) acts.push({ type: "Vote", choice: plan.vote });
+  return acts;
+}
+
+function renderEnd() {
+  show("end");
+  const res = S.result, me = S.obs.me.id, place = res.ranking.findIndex(r => r.id === me) + 1;
+  $("#endTitle").textContent = res.collapsed ? "Az állomás összeomlott" : "Vége a játéknak";
+  $("#endLead").textContent = res.collapsed
+    ? "A hazard elérte az 1-et, ezért mindenki veszített. Az egyenlegek csak tájékoztatásul szerepelnek."
+    : (place === 1 ? "Megnyerted: a tiéd a legnagyobb egyenleg." : `${art(place, true)} ${place}. helyen végeztél ${res.ranking.length} játékos közül.`);
+  $("#rank tbody").innerHTML = res.ranking.map((r, i) => `<tr class="${r.id === me ? "you" : ""}">
+    <td>${i + 1}.</td><td>${avatar(r.id, 20)} ${r.id === me ? "Te" : esc(who(r.id))}${r.status === "bankrupt" ? " (csődbe ment)" : ""}</td>
+    <td>${esc(r.kind)}</td><td class="num">${int(r.balance)}</td></tr>`).join("");
+  $("#endLog").textContent = S.log_file ? `A játék naplója: ${S.log_file} (seed ${S.seed}).` : `Seed: ${S.seed}.`;
+}
+
+function fillRules() {
+  // játék előtt a rövid játék alapértékei látszanak
+  const P = (S && S.obs) ? S.obs.params : { r: 0.03, delta: 0.10, beta: 0.05, i: 0.01, span_free: 3, span_penalty: 0.10 };
+  const v = { r: P.r * 100, delta: P.delta * 100, beta: (1 + P.beta) * 100 - 100, i: P.i * 100, span_free: P.span_free, span_penalty: P.span_penalty * 100 };
+  for (const el of document.querySelectorAll("[data-p]")) el.textContent = dec(v[el.dataset.p], 0);
+}
+
+
+document.addEventListener("input", e => {
+  const t = e.target;
+  if (t.dataset.k === "auto") { const id = +t.closest(".mod").dataset.mid; autoKeep[id] = t.checked; if (t.checked) fillAuto(id); return recalc(); }
+  if (t.dataset.quick !== undefined) { const inp = $(`#market .mod[data-mid="${t.dataset.quick}"] [data-k="bid"]`); if (inp) inp.value = t.value; return recalc(); }
+  if (t.matches("#game input")) recalc();
+});
+document.addEventListener("click", e => {
+  const t = e.target;
+  if (t.id === "btnShip") return showShip();
+  if (t.dataset.minbid !== undefined) { const inp = $(`#shipBox [data-item="${t.dataset.minbid}"]`); inp.value = inp.placeholder.split(" ").pop(); return recalc(); }
+  if (t.dataset.f !== undefined) { filter = t.dataset.f; renderMarket(); return recalc(); }
+  if (t.id === "pledgeFair") { $("#pledge").value = t.dataset.fair; return recalc(); }
+  if (t.dataset.full !== undefined) { $('[data-k="maint"]', t.closest(".mod")).value = t.dataset.full; return recalc(); }
+  if (t.dataset.v !== undefined) { const v = +t.dataset.v; plan.vote = plan.vote === v ? null : v; return renderVote(); }
+  const head = t.closest(".mod header"); if (head) return select(+head.parentElement.dataset.mid, false);
+});
+$("#btnRules").onclick = () => { fillRules(); $("#rules").showModal(); };
+$("#btnCloseRules").onclick = () => $("#rules").close();
+$("#btnAgain").onclick = () => { S = { active: false }; selected = null; render(); };
+$("#btnStart").onclick = async () => {
+  for (const k in autoKeep) delete autoKeep[k];
+  try { newPlan(); selected = null; S = await api("POST", "/api/new", { seed: $("#optSeed").value.trim() || null, gemini: +$("#optGemini").value }); render(); }
+  catch (e) { fail(e); }
+};
+$("#btnTurn").onclick = async () => {
+  if (busy) return;
+  busy = true; const b = $("#btnTurn"); b.disabled = true; b.textContent = "Az ellenfelek lépnek…";
+  try { const next = await api("POST", "/api/turn", { actions: buildActions() }); S = next; newPlan(); selected = null; }
+  catch (e) { fail(e); }
+  busy = false; b.textContent = "Kör lezárása"; render();
+  for (const c of document.querySelectorAll(".col")) c.scrollTop = 0;
+};
+// híd a valódi 3D-s jelenethez (scene3d.js): onnan ezen át érhető el az állapot
+window.Game = { get S() { return S; }, get plan() { return plan; }, get selected() { return selected; }, select, ownerColor, showShip };
+(async () => { newPlan(); Holo.start(); try { S = await api("GET", "/api/state"); } catch (e) { S = { active: false }; fail(e); } render(); })();
+</script>
+<script type="module" src="/scene3d.js"></script>
+</body>
+</html>

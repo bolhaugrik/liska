@@ -1,0 +1,12 @@
+[project]
+name = "liska-v2"
+version = "2.1.1"
+description = "Liska-játék v2 – determinisztikus motor, ügynökök, kalibrálás"
+requires-python = ">=3.10"
+
+[project.optional-dependencies]
+test = ["pytest"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

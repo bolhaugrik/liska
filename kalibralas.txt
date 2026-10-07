@@ -1,0 +1,14 @@
+50 seed, rendenként
+
+                        összeoml.        csőd átl.egyenl.        Gini     állapot  beruh.ráta  gazdacsere megtart.ar.    ár/hozam záró hazard össztermelés
+liska (szakért. 0.2)        0.000       0.000    5578.460       0.233       0.814       0.286       0.008       0.000      13.286       0.090  111873.327
+private (szakért. 0.2)      0.180       0.000    3733.908       0.228       0.774       0.372       0.007       0.000      11.346       0.604   88548.102
+fixed (szakért. 0.2)        0.020       0.000    3789.740       0.234       0.767       0.354       0.000           –       8.755       0.487   90044.381
+
+liska (szakért. 0.0)        0.000       0.000    5290.759       0.224       0.819       0.291       0.006       0.000      12.552       0.078  107111.389
+private (szakért. 0.0)      0.040       0.000    3674.267       0.216       0.782       0.342       0.005       0.000      11.680       0.514   83961.666
+fixed (szakért. 0.0)        0.000       0.000    3949.460       0.234       0.795       0.327       0.000           –       8.999       0.276   88068.294
+
+Véletlen ügynökök (a motor terheléses próbája), liska rend:
+  események: {'összeomlás': 49, 'takeovers': 1257, 'retained': 1192, 'bankruptcies': 45, 'failures': 3028, 'acquired': 1241, 'ügynökhiba': 525}
+  okkódok:   {'OK': 22801, 'INVALID_TARGET': 14626, 'NO_OPEN_VOTE': 13527, 'NOT_HOLDER': 11017, 'INSUFFICIENT_COVER': 7357, 'MAX_LEVEL': 6362, 'DUPLICATE': 3779, 'BID_BELOW_MIN': 1932, 'OWN_MODULE': 1036, 'PRICE_DROP_LIMIT': 37, 'CAP_BELOW_PRICE': 30}

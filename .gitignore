@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/
+*.egg-info/
+
+# titkok: a Gemini-kulcs környezeti változóban él, fájlba ne kerüljön
+.env
+.env.*
+*.key
+
+# futás közben keletkező fájlok: játéknaplók, LLM-naplók
+*.jsonl
+*.log
+
+# szerkesztők, rendszerfájlok
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# nagy, átalakítás előtti modellek (a játékba az előkészített változat kerül)
+/forras-modellek/
