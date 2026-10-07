@@ -1,4 +1,40 @@
-# Liska-játék v2 – motor és játék (2.1.1-es verzió)
+# Liska-állomás
+
+![A játék képernyője: középen az űrállomás 24 modulja, bal oldalt a megbízások és a hírek, jobb oldalt a modulok kártyái](docs/kepernyo.jpg)
+
+Gazdasági stratégiai játék és kutatási szimuláció egy űrállomáson, amelyben a modulok nem tulajdonok,
+hanem birtokok: mindenki maga mondja meg, mennyit ér neki a modulja, ez után járadékot fizet a közösségnek,
+és aki többet ajánl érte, elviszi. A szabályrendszer Liska Tibor modelljéből indul ki. (2.1.1-es verzió)
+
+## Liska Tibor és a Liska-modell
+
+**Liska Tibor** (1925–1994) magyar közgazdász volt, a hazai reformközgazdaságtan egyik legeredetibb
+gondolkodója. Fő műve az 1960-as években írt, de csak 1988-ban megjelent *Ökonosztát*. Elképzelését
+vállalkozói szocializmusnak is nevezték; az 1980-as években kisebb kísérletekben a gyakorlatban is
+kipróbálhatta, többek között szentesi, igali és baksai termelőszövetkezetekben.
+
+A **Liska-modell** központi gondolata, hogy maga a tulajdon is verseny tárgya legyen:
+
+- **Személyes társadalmi tulajdon.** A termelőeszköz nem az államé, és nem is magántulajdon. Az működteti,
+  aki nyílt versenyben a legtöbbet vállalja érte, és amíg működteti, fizet érte a közösségnek.
+- **Folyamatos licit.** A birtokos nem ülhet a helyén örökre: ha valaki többet ajánl, vagy a birtokos
+  vállal többet, vagy átadja a helyét.
+- **Társadalmi örökség.** Mindenki egyenlő induló tőkéhez jut, amelyet nem élhet fel, de vállalkozásához
+  fedezetül használhat.
+- **Az állam játékvezető.** Betartatja a szabályokat, de nem szól bele, ki mit csináljon.
+
+A játék ezekből az elemekből építkezik: a modulok birtokok, a birtokos önértékelése után jár a járadék,
+bárki túllicitálhatja, a hitelkeret a társadalmi örökség megfelelője, a járadék pedig közösségi alapba
+folyik. Ami ezen túl van benne (a rejtett megtartási plafon, a válsághelyzetek, a kereskedőhajó, a
+megbízások, a szakértelem), az játéktervezési döntés, nem Liska modelljének része. A játék tehát nem a
+modell hű szimulációja, hanem egy belőle kiinduló kísérlet.
+
+Olvasnivaló:
+
+- F. Liska Tibor: *A Liska-modell.* Közgazdasági Szemle, 1998/10., 940–953. o.
+- Liska Tibor: *Ökonosztát.* Közgazdasági és Jogi Könyvkiadó, 1988.
+
+## Mi van a csomagban
 
 A szabályspecifikáció („Liska-játék v2 – szabályspecifikáció") megvalósítása: determinisztikus
 motor, közös döntési felület, két ügynöktípus, invariánstesztek és kalibráló szkript.
